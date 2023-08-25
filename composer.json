@@ -1,0 +1,8 @@
+{
+    "name": "newcool/growtype-cron",
+    "description": "growtype-cron - 1.0.0",
+    "type": "wordpress-plugin",
+    "require": {
+        "php": "^7.2"
+    }
+}
