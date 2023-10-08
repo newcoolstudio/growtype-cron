@@ -57,3 +57,10 @@ if (!function_exists('growtype_cron_load_textdomain')) {
         }
     }
 }
+
+if (!function_exists('growtype_cron_init_job')) {
+    function growtype_cron_init_job($job_name, $payload, $delay = 0)
+    {
+        Growtype_Cron_Jobs::create($job_name, $payload, $delay);
+    }
+}

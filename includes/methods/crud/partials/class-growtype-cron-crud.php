@@ -23,7 +23,7 @@ class Growtype_Cron_Crud
             $query_where = [];
 
             foreach ($params as $param) {
-                array_push($query_where, $param['key'] . "='" . $param['value'] . "'");
+                array_push($query_where, $param['key'] . (isset($param['operator']) ? $param['operator'] : "=") . "'" . $param['value'] . "'");
             }
 
             $query = "SELECT * FROM " . $table . " where " . implode(' AND ', $query_where);

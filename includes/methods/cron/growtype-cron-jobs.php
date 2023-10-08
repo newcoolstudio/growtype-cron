@@ -4,9 +4,9 @@ class Growtype_Cron_Jobs
 {
     const JOBS_TABLE = 'wp_growtype_cron_jobs';
     const GROWTYPE_CRON_JOBS = 'growtype_cron_jobs';
-
-    const RETRIEVE_JOBS_LIMIT = 3;
-    const JOBS_ATTEMPTS_LIMIT = 3;
+    const PROCESS_PER_QUEUE_LIMIT = 3;
+    const TOTAL_PROCESS_LIMIT = 4;
+    const PROCESS_ATTEMPTS_LIMIT = 3;
 
     public function __construct()
     {
@@ -54,12 +54,11 @@ class Growtype_Cron_Jobs
             $classname = $jobs[$job['queue']]['classname'];
             $job_class = new $classname();
 
-            $job_class->run(json_decode($job['payload'], true));
+            $job_class->run($job);
 
             /**
              * Delete job
              */
-
             error_log('Delete: ' . $job['id']);
 
             Growtype_Cron_Crud::delete_records(Growtype_Cron_Database::JOBS_TABLE, [$job['id']]);
@@ -144,6 +143,8 @@ class Growtype_Cron_Jobs
 
     function process_jobs()
     {
+        error_log('---PROCESS JOBS INIT---');
+
         $jobs_reserved = Growtype_Cron_Crud::get_records(Growtype_Cron_Database::JOBS_TABLE, [
             [
                 'key' => 'reserved',
@@ -151,7 +152,8 @@ class Growtype_Cron_Jobs
             ]
         ], 'where');
 
-        if (!empty($jobs_reserved)) {
+        if (count($jobs_reserved) > self::TOTAL_PROCESS_LIMIT) {
+            error_log(sprintf('Total jobs reserved: %s, Total process limit: %s', count($jobs_reserved), self::TOTAL_PROCESS_LIMIT));
             exit();
         }
 
@@ -159,18 +161,38 @@ class Growtype_Cron_Jobs
             [
                 'key' => 'reserved',
                 'value' => 0,
+            ],
+            [
+                'key' => 'attempts',
+                'operator' => '<',
+                'value' => 3,
             ]
         ], 'where');
 
         if (!empty($jobs)) {
-            error_log('Jobs left ' . count($jobs));
+            error_log('TOTAL Jobs found ' . count($jobs));
         }
 
+        $already_processed_jobs = [];
         foreach ($jobs as $job) {
+
+            /**
+             * Prevent duplicate jobs
+             */
+            if (in_array($job['id'], $already_processed_jobs)) {
+                continue;
+            }
+
+            array_push($already_processed_jobs, $job['id']);
+
+            /**
+             * Check attempts
+             */
             $attempts = isset($job['attempts']) && !empty($job['attempts']) ? (int)$job['attempts'] : 0;
             $job_date = $job['available_at'];
 
             if ($job_date > wp_date('Y-m-d H:i:s')) {
+                error_log(sprintf('Job not available yet. Job id: %s, Job date: %s, Current date: %s', $job['id'], $job_date, wp_date('Y-m-d H:i:s')));
                 continue;
             }
 
@@ -184,7 +206,7 @@ class Growtype_Cron_Jobs
             /**
              * Limit attempts
              */
-            if ((int)$job['attempts'] >= (self::JOBS_ATTEMPTS_LIMIT > 0 ? self::JOBS_ATTEMPTS_LIMIT : 1)) {
+            if ((int)$job['attempts'] >= (self::PROCESS_ATTEMPTS_LIMIT > 0 ? self::PROCESS_ATTEMPTS_LIMIT : 1)) {
                 continue;
             }
 
@@ -244,7 +266,7 @@ class Growtype_Cron_Jobs
         /**
          * Do not generate more than retrieve jobs at the same time
          */
-        if ($active_jobs > self::RETRIEVE_JOBS_LIMIT) {
+        if ($active_jobs > self::PROCESS_PER_QUEUE_LIMIT) {
             return false;
         }
 

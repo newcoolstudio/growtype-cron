@@ -38,10 +38,8 @@ class Growtype_Cron_Deactivator
         /**
          * Cron
          */
-        if (class_exists('Growtype_Cron_Jobs')) {
-            $timestamp = wp_next_scheduled(Growtype_Cron_Jobs::GROWTYPE_CRON_JOBS);
-            wp_unschedule_event($timestamp, Growtype_Cron_Jobs::GROWTYPE_CRON_JOBS);
-        }
+        $timestamp = wp_next_scheduled(Growtype_Cron_Jobs::GROWTYPE_CRON_JOBS);
+        wp_unschedule_event($timestamp, Growtype_Cron_Jobs::GROWTYPE_CRON_JOBS);
     }
 
 }
