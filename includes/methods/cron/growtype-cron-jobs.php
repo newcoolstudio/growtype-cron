@@ -59,7 +59,7 @@ class Growtype_Cron_Jobs
             /**
              * Delete job
              */
-            error_log('Delete: ' . $job['id']);
+            error_log('growtype-cron. Delete job. Id: ' . $job['id']);
 
             Growtype_Cron_Crud::delete_records(Growtype_Cron_Database::JOBS_TABLE, [$job['id']]);
         } catch (AError|BError $e) {
@@ -169,9 +169,7 @@ class Growtype_Cron_Jobs
             ]
         ], 'where');
 
-        if (!empty($jobs)) {
-            error_log('TOTAL Jobs found ' . count($jobs));
-        }
+        error_log('TOTAL Jobs found ' . count($jobs));
 
         $already_processed_jobs = [];
         foreach ($jobs as $job) {
