@@ -8,8 +8,6 @@ class Growtype_Cron_Database
 
     public function __construct()
     {
-        add_action('init', array ($this, 'create_tables'), 5);
-
         $this->load_methods();
     }
 
@@ -57,13 +55,13 @@ class Growtype_Cron_Database
     /**
      * Create required table
      */
-    public function create_tables()
+    public static function create_tables()
     {
         global $wpdb;
 
         require_once(ABSPATH . 'wp-admin/includes/upgrade.php');
 
-        $tables = $this->get_tables();
+        $tables = self::get_tables();
 
         foreach ($tables as $table) {
             $table_name = $table['name'];

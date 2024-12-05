@@ -157,5 +157,8 @@ class Growtype_Cron_Loader
          */
         require_once GROWTYPE_CRON_PATH . 'includes/methods/cron/growtype-cron-jobs.php';
         new Growtype_Cron_Jobs();
+
+        require_once GROWTYPE_CRON_PATH . 'includes/methods/cron/growtype-cron-events.php';
+        new Growtype_Cron_Events();
     }
 }

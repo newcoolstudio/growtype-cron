@@ -73,6 +73,8 @@ class Growtype_Cron
      *
      * @since    1.0.0
      */
+    private $growtype_cron;
+
     public function __construct()
     {
         if (defined('GROWTYPE_CRON_VERSION')) {

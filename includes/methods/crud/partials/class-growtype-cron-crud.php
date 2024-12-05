@@ -23,10 +23,11 @@ class Growtype_Cron_Crud
             $query_where = [];
 
             foreach ($params as $param) {
-                array_push($query_where, $param['key'] . (isset($param['operator']) ? $param['operator'] : "=") . "'" . $param['value'] . "'");
+                $operator = isset($param['operator']) ? $param['operator'] : "=";
+                $query_where[] = $wpdb->prepare("{$param['key']} $operator %s", $param['value']);
             }
 
-            $query = "SELECT * FROM " . $table . " where " . implode(' AND ', $query_where);
+            $query = "SELECT * FROM $table WHERE " . implode(' AND ', $query_where);
 
             $records = $wpdb->get_results($query, ARRAY_A);
         } else {

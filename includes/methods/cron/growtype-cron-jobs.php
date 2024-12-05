@@ -2,11 +2,12 @@
 
 class Growtype_Cron_Jobs
 {
-    const JOBS_TABLE = 'wp_growtype_cron_jobs';
     const GROWTYPE_CRON_JOBS = 'growtype_cron_jobs';
     const PROCESS_PER_QUEUE_LIMIT = 3;
     const TOTAL_PROCESS_LIMIT = 4;
     const PROCESS_ATTEMPTS_LIMIT = 3;
+
+    private $log_info;
 
     public function __construct()
     {
@@ -23,20 +24,45 @@ class Growtype_Cron_Jobs
             $this,
             'load_jobs'
         ));
+
+        $this->log_info = !empty(getenv('GROWTYPE_CRON_LOG_INFO')) ? getenv('GROWTYPE_CRON_LOG_INFO') : false;
     }
 
-    public static function create($job_name, $payload, $delay = 5)
+    public static function create($queue_name, $payload, $delay = 5)
     {
+        $available_at = date('Y-m-d H:i:s', strtotime(wp_date('Y-m-d H:i:s')) + $delay);
+
+        $existing_jobs = self::specific_jobs($queue_name);
+
+        if (!empty($existing_jobs)) {
+            $existing_job = array_reverse($existing_jobs)[0];
+
+            $available_at = date('Y-m-d H:i:s', strtotime($existing_job['available_at']) + $delay);
+        }
+
         $record = Growtype_Cron_Crud::insert_record(Growtype_Cron_Database::JOBS_TABLE, [
-            'queue' => $job_name,
+            'queue' => $queue_name,
             'payload' => $payload,
             'attempts' => 0,
             'reserved_at' => wp_date('Y-m-d H:i:s'),
-            'available_at' => date('Y-m-d H:i:s', strtotime(wp_date('Y-m-d H:i:s')) + $delay),
+            'available_at' => $available_at,
             'reserved' => 0
         ]);
 
         return $record;
+    }
+
+    public static function create_if_not_exists($cron_event_name, $payload, $delay = 5)
+    {
+        $job_exists = Growtype_Cron_Jobs::specific_jobs_exists(Growtype_Cron_Jobs::format_queue_name($cron_event_name), $payload);
+
+        if ($job_exists) {
+            return false;
+        }
+
+        Growtype_Cron_Jobs::create(Growtype_Cron_Jobs::format_queue_name($cron_event_name), $payload, $delay);
+
+        return true;
     }
 
     function init_job($job)
@@ -59,7 +85,9 @@ class Growtype_Cron_Jobs
             /**
              * Delete job
              */
-            error_log('growtype-cron. Delete job. Id: ' . $job['id']);
+            if ($this->log_info) {
+                error_log('growtype-cron. Delete job. Id: ' . $job['id']);
+            }
 
             Growtype_Cron_Crud::delete_records(Growtype_Cron_Database::JOBS_TABLE, [$job['id']]);
         } catch (AError|BError $e) {
@@ -96,39 +124,49 @@ class Growtype_Cron_Jobs
 
     function cron_custom_intervals()
     {
-        $schedules['every10seconds'] = array (
+        $schedules['growtype_cron_every_10_seconds'] = array (
             'interval' => 10,
             'display' => __('Once Every 10 seconds')
         );
 
-        $schedules['every20seconds'] = array (
+        $schedules['growtype_cron_every_20_seconds'] = array (
             'interval' => 20,
             'display' => __('Once Every 20 seconds')
         );
 
-        $schedules['every30seconds'] = array (
+        $schedules['growtype_cron_every_30_seconds'] = array (
             'interval' => 30,
             'display' => __('Once Every 30 seconds')
         );
 
-        $schedules['everyminute'] = array (
+        $schedules['growtype_cron_every_minute'] = array (
             'interval' => 60,
             'display' => __('Once Every Minute')
         );
 
-        $schedules['every5minute'] = array (
+        $schedules['growtype_cron_every_5_minute'] = array (
             'interval' => 60 * 5,
             'display' => __('Once Every 5 Minute')
         );
 
-        $schedules['every10minute'] = array (
+        $schedules['growtype_cron_every_10_minute'] = array (
             'interval' => 60 * 10,
             'display' => __('Once Every 10 Minute')
         );
 
-        $schedules['every30minute'] = array (
+        $schedules['growtype_cron_every_30_minute'] = array (
             'interval' => 60 * 30,
             'display' => __('Once Every 30 Minute')
+        );
+
+        $schedules['growtype_cron_every_month'] = array (
+            'interval' => 2630000,
+            'display' => __('Once Every Month')
+        );
+
+        $schedules['growtype_cron_every_3_months'] = array (
+            'interval' => 7890000,
+            'display' => __('Once Every 3 Months')
         );
 
         return $schedules;
@@ -137,13 +175,15 @@ class Growtype_Cron_Jobs
     function cron_activation()
     {
         if (!wp_next_scheduled(self::GROWTYPE_CRON_JOBS)) {
-            wp_schedule_event(time(), 'every10seconds', self::GROWTYPE_CRON_JOBS);
+            wp_schedule_event(time(), 'growtype_cron_every_10_seconds', self::GROWTYPE_CRON_JOBS);
         }
     }
 
     function process_jobs()
     {
-        error_log('---PROCESS JOBS INIT---');
+        if ($this->log_info) {
+            error_log('---PROCESS JOBS INIT---');
+        }
 
         $jobs_reserved = Growtype_Cron_Crud::get_records(Growtype_Cron_Database::JOBS_TABLE, [
             [
@@ -153,7 +193,9 @@ class Growtype_Cron_Jobs
         ], 'where');
 
         if (count($jobs_reserved) > self::TOTAL_PROCESS_LIMIT) {
-            error_log(sprintf('Total jobs reserved: %s, Total process limit: %s', count($jobs_reserved), self::TOTAL_PROCESS_LIMIT));
+            if ($this->log_info) {
+                error_log(sprintf('Total jobs reserved: %s, Total process limit: %s', count($jobs_reserved), self::TOTAL_PROCESS_LIMIT));
+            }
             exit();
         }
 
@@ -169,7 +211,9 @@ class Growtype_Cron_Jobs
             ]
         ], 'where');
 
-        error_log('TOTAL Jobs found ' . count($jobs));
+        if ($this->log_info) {
+            error_log('TOTAL Jobs found ' . count($jobs));
+        }
 
         $already_processed_jobs = [];
         foreach ($jobs as $job) {
@@ -190,14 +234,16 @@ class Growtype_Cron_Jobs
             $job_date = $job['available_at'];
 
             if ($job_date > wp_date('Y-m-d H:i:s')) {
-                error_log(sprintf('Job not available yet. Job id: %s, Job date: %s, Current date: %s', $job['id'], $job_date, wp_date('Y-m-d H:i:s')));
+                if ($this->log_info) {
+                    error_log(sprintf('Job not available yet. Job id: %s, Job date: %s, Current date: %s', $job['id'], $job_date, wp_date('Y-m-d H:i:s')));
+                }
                 continue;
             }
 
             /**
              * Check if new job is available
              */
-            if (!$this->new_generate_job_is_available($job['queue'])) {
+            if (!$this->new_job_is_available($job['queue'])) {
                 continue;
             }
 
@@ -220,16 +266,18 @@ class Growtype_Cron_Jobs
                 'attempts' => ($attempts + 1),
             ], $job['id']);
 
-            error_log('Job processing. Init job: ' . json_encode([
-                    'job_id' => $job['id'],
-                    'job_attempts' => $attempts,
-                ]), 0);
+            if ($this->log_info) {
+                error_log('Job processing. Init job: ' . json_encode([
+                        'job_id' => $job['id'],
+                        'job_attempts' => $attempts,
+                    ]), 0);
+            }
 
             $this->init_job($job);
         }
     }
 
-    function new_generate_job_is_available($queue)
+    function new_job_is_available($queue)
     {
         $retrieve_jobs = Growtype_Cron_Crud::get_records(Growtype_Cron_Database::JOBS_TABLE, [
             [
@@ -269,5 +317,59 @@ class Growtype_Cron_Jobs
         }
 
         return true;
+    }
+
+    public static function waiting_in_queue()
+    {
+        $all_jobss = Growtype_Cron_Crud::get_records(Growtype_Cron_Database::JOBS_TABLE);
+
+        $waiting_jobs = [];
+        foreach ($all_jobss as $job) {
+            if ((int)$job['attempts'] < self::PROCESS_ATTEMPTS_LIMIT) {
+                array_push($waiting_jobs, $job['queue']);
+            }
+        }
+
+        return $waiting_jobs;
+    }
+
+    public static function format_queue_name($cron_event_name)
+    {
+        return str_replace('growtype-cron-', '', str_replace('_', '-', $cron_event_name));
+    }
+
+    public static function specific_jobs($queue, $payload = null)
+    {
+        $keys = [
+            [
+                'key' => 'queue',
+                'value' => $queue,
+            ],
+        ];
+
+        if (!empty($payload)) {
+            $keys[] = [
+                'key' => 'payload',
+                'value' => $payload,
+            ];
+        }
+
+        $jobs = Growtype_Cron_Crud::get_records(Growtype_Cron_Database::JOBS_TABLE, $keys, 'where');
+
+        return $jobs;
+    }
+
+    public static function specific_jobs_exists($queue, $payload)
+    {
+        $jobs_amount = self::specific_jobs_amount($queue, $payload);
+
+        return !empty($jobs_amount) ? true : false;
+    }
+
+    public static function specific_jobs_amount($queue, $payload)
+    {
+        $jobs = self::specific_jobs($queue, $payload);
+
+        return count($jobs);
     }
 }

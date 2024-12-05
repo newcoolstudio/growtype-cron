@@ -63,23 +63,6 @@ class Growtype_Cron_Admin
              */
             add_action('init', array ($this, 'add_pages'));
         }
-
-        /**
-         * Ajax
-         */
-        add_action('wp_ajax_remove_image', array ($this, 'remove_image_callback'));
-    }
-
-    function remove_image_callback()
-    {
-        $image_id = $_POST['image_id'];
-
-        Growtype_Cron_Crud::delete_image($image_id);
-
-        return wp_send_json(
-            [
-                'message' => __('Your subscription is successful. Thank you.', 'growtype')
-            ], 200);
     }
 
     /**

@@ -65,6 +65,11 @@ function activate_growtype_cron()
 {
     require_once GROWTYPE_CRON_PATH . 'includes/class-growtype-cron-activator.php';
     Growtype_Cron_Activator::activate();
+
+    /**
+     * Create tables
+     */
+    Growtype_Cron_Database::create_tables();
 }
 
 /**
