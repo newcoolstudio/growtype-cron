@@ -40,14 +40,27 @@ class Growtype_Cron_Jobs
             $available_at = date('Y-m-d H:i:s', strtotime($existing_job['available_at']) + $delay);
         }
 
-        $record = Growtype_Cron_Crud::insert_record(Growtype_Cron_Database::JOBS_TABLE, [
+        $max_length = 50;
+        if (strlen($queue_name) > $max_length) {
+            $queue_name = substr($queue_name, 0, $max_length);
+
+            error_log(sprintf(
+                'Queue name is too long - %s. Trimming to %s characters.',
+                $queue_name,
+                $max_length
+            ));
+        }
+
+        $data = [
             'queue' => $queue_name,
             'payload' => $payload,
             'attempts' => 0,
             'reserved_at' => wp_date('Y-m-d H:i:s'),
             'available_at' => $available_at,
             'reserved' => 0
-        ]);
+        ];
+
+        $record = Growtype_Cron_Crud::insert_record(Growtype_Cron_Database::JOBS_TABLE, $data);
 
         return $record;
     }
