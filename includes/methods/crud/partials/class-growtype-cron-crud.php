@@ -32,22 +32,27 @@ class Growtype_Cron_Crud
             $records = $wpdb->get_results($query, ARRAY_A);
         } else {
             foreach ($params as $param) {
-                $limit = isset($param['limit']) ? $param['limit'] : 1000;
-                $offset = isset($param['offset']) ? $param['offset'] : 0;
-                $search = isset($param['search']) ? $param['search'] : null;
-                $orderby = isset($param['orderby']) ? $param['orderby'] : 'created_at';
-                $order = isset($param['order']) ? $param['order'] : 'desc';
+                $limit = isset($param['limit']) ? absint($param['limit']) : 1000;
+                $offset = isset($param['offset']) ? absint($param['offset']) : 0;
+                $search = isset($param['search']) ? sanitize_text_field($param['search']) : null;
+                $orderby = isset($param['orderby']) ? sanitize_text_field($param['orderby']) : 'created_at';
+                $order = isset($param['order']) && in_array(strtoupper($param['order']), ['ASC', 'DESC']) ? strtoupper($param['order']) : 'DESC';
                 $values = isset($param['values']) ? $param['values'] : null;
-                $key = isset($param['key']) ? $param['key'] : null;
+                $key = isset($param['key']) ? sanitize_text_field($param['key']) : null;
 
                 if (!empty($values) && !empty($key)) {
                     $placeholders = implode(', ', array_fill(0, count($values), '%s'));
                     $query = "SELECT * FROM " . $table . " WHERE " . $key . " IN($placeholders)";
                     $query = $wpdb->prepare($query, $values);
                 } elseif (!empty($search)) {
-                    $query = "SELECT * from {$table} WHERE id Like '%{$search}%' OR prompt Like '%{$search}%' OR negative_prompt Like '%{$search}%' OR reference_id Like '%{$search}%' ORDER BY {$orderby} {$order} LIMIT {$limit} OFFSET {$offset}";
+                    // SECURITY: Use prepared statements for LIKE queries to prevent SQL injection
+                    $search_param = '%' . $wpdb->esc_like($search) . '%';
+                    $query = $wpdb->prepare(
+                        "SELECT * from {$table} WHERE id Like %s OR prompt Like %s OR negative_prompt Like %s OR reference_id Like %s ORDER BY {$orderby} {$order} LIMIT %d OFFSET %d",
+                        $search_param, $search_param, $search_param, $search_param, $limit, $offset
+                    );
                 } else {
-                    $query = "SELECT * from {$table} ORDER BY {$orderby} {$order} LIMIT {$limit} OFFSET {$offset}";
+                    $query = $wpdb->prepare("SELECT * from {$table} ORDER BY {$orderby} {$order} LIMIT %d OFFSET %d", $limit, $offset);
                 }
 
                 $results = $wpdb->get_results($query, ARRAY_A);
@@ -141,13 +146,17 @@ class Growtype_Cron_Crud
 
         $table = $wpdb->prefix . $table_name;
 
+        // SECURITY: Use prepared statements to prevent SQL injection
         $query_where = [];
+        $values = [];
         foreach ($params as $param) {
-            array_push($query_where, $param['key'] . "='" . $param['value'] . "'");
+            $query_where[] = $param['key'] . " = %s";
+            $values[] = $param['value'];
         }
 
-        $query_where = "DELETE FROM " . $table . " where " . implode(' AND ', $query_where);
+        $query = "DELETE FROM " . $table . " WHERE " . implode(' AND ', $query_where);
+        $query = $wpdb->prepare($query, $values);
 
-        $wpdb->query($query_where);
+        $wpdb->query($query);
     }
 }
